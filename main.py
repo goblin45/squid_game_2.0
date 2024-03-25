@@ -1,6 +1,8 @@
 import cv2 as cv
 import time
 
+from audio.py import playAudio
+
 capture = cv.VideoCapture(0)
 
 faceCascade = cv.CascadeClassifier(cv.data.haarcascades + 'haarcascade_frontalface_default.xml')
@@ -33,12 +35,10 @@ while True:
         x1, y1, w1, h1 = prevCoordinates
         if (abs(x - x1) > TOLERANCE or abs(y - y1) > TOLERANCE 
             or abs(w - w1) > TOLERANCE or abs(h - h1) > TOLERANCE):
-            # print('moving')
             moves += 1
             if moves > TOLERANCE / 4:
                 moveText = "moving..."
                 print(moves, moveText)
-            # setTimeout(setMoving, 250)
         else:
             moveText = ""
             moves = 0
