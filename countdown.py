@@ -10,7 +10,7 @@ def countTime():
     global currTime
     global timeOver
     currTime = "0" + str(MINUTES) + ":00"
-    time.sleep(1)
+    time.sleep(5)
     
     for minute in range(MINUTES - 1, -1, -1):
         for second in range(59, -1, -1):

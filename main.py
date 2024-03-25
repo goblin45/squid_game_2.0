@@ -19,35 +19,67 @@ def startGame():
     cv.namedWindow('Game Window', cv.WINDOW_NORMAL)
     cv.setWindowProperty('Game Window', cv.WND_PROP_FULLSCREEN, cv.WINDOW_FULLSCREEN)
 
-    prevCoordinates = (0, 0, 0, 0) # x, y, w, h
     TOLERANCE = 5
-    moveText = ""
-
-    moves = 0
 
     global winner
-
     winner = ""
+
+    players = []
+    colors = [
+        (0, 255, 255),  # Yellow
+        (147, 20, 255),  # Pink
+        (0, 100, 0),  # Dark Green
+        (0, 0, 128),  # Maroon
+        (128, 128, 128)  # Gray
+    ]
 
     while True:
         ret, frame = capture.read()
         grayFrame = cv.cvtColor(frame, cv.COLOR_BGR2GRAY)
 
-        faces = faceCascade.detectMultiScale(grayFrame, scaleFactor=1.1, minNeighbors=5, minSize=(30,30))
-        # for (x, y, w, h) in faces: 
-        #     cv.rectangle(frame, (x, y), (x + w, y + h), (255, 0, 0), 2)
-        #     x1, y1, w1, h1 = prevCoordinates
-        #     if (abs(x - x1) > TOLERANCE or abs(y - y1) > TOLERANCE 
-        #         or abs(w - w1) > TOLERANCE or abs(h - h1) > TOLERANCE):
-        #         moves += 1
-        #         if moves > TOLERANCE / 4:
-        #             moveText = "moving..."
-        #     else:
-        #         moveText = ""
-        #         moves = 0
-        #     prevCoordinates = (x, y, w, h)
-        text = countdown.currTime
+        faces = faceCascade.detectMultiScale(grayFrame, scaleFactor=1.1, minNeighbors=5, minSize=(30,30)) # do whatever you want
 
+        for i, (x, y, w, h) in enumerate(faces): 
+            cv.rectangle(frame, (x, y), (x + w, y + h), colors[i % 5], 2)
+
+            text = "Player " + str(i + 1)
+            text_size, _ = cv.getTextSize(text, cv.FONT_HERSHEY_SIMPLEX, 1, 2)
+            text_x = x + (w - text_size[0]) // 2
+            text_y = y - 10
+
+            cv.putText(frame, text, (text_x, text_y), cv.FONT_HERSHEY_SIMPLEX, 1, colors[i % 5], 2)
+
+            if i + 1 > len(players):
+                while len(players) < i + 1:
+                    players.append([])
+            players[i].append((x, y))
+
+            # we are taking past 20 frames into consideration to detect a movement
+            if len(players[i]) > 20: # this parameter should be tuned
+                players[i].pop()
+
+            if light.currLight == (0, 255, 0): # green; player can move
+                for player in players:
+                    player.clear()
+            else:
+                # find out maximum movement the past 20 frames, if it exceeds TOLERANCE, detect it as a movement
+                maxMovement = 0
+                for j in range(len(players[i]) - 1):
+                    for k in range(j + 1, len(players[i])):
+                        dist = np.sqrt(abs(players[i][j][0] - players[i][k][0])** 2 + abs(players[i][j][1] - players[i][k][1]) ** 2)
+                        maxMovement = max(maxMovement, dist)
+
+                if maxMovement > TOLERANCE: # TOLERANCE should be tuned
+                    text = "Player " + str(i + 1) + " is out."
+                    text_size, _ = cv.getTextSize(text, cv.FONT_HERSHEY_SIMPLEX, 1.5, 2)
+
+                    # bottom center position for player cancel notification
+                    text_x = (frame.shape[1] - text_size[0]) // 2
+                    text_y = frame.shape[0] - 30
+
+                    cv.putText(frame, text, (text_x, text_y), cv.FONT_HERSHEY_SIMPLEX, 1.5, (0, 0, 255), 2)
+
+        text = countdown.currTime
         text_size, _ = cv.getTextSize(text, cv.FONT_HERSHEY_SIMPLEX, 1, 2)
         
         padding = 20
@@ -158,7 +190,6 @@ if __name__ == "__main__":
     videoThread = threading.Thread(target=startGame, args=())
     videoThread.start()
 
-    # time.sleep(3)
     audio.gameOn = True
     audioThread = threading.Thread(target=audio.loopAudio, args=())
     audioThread.start()
