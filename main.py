@@ -1,54 +1,170 @@
+import numpy as np
 import cv2 as cv
+import threading
 import time
 
-from audio.py import playAudio
+import audio
+import light
+import countdown
 
-capture = cv.VideoCapture(0)
+def startGame():
+    # time.sleep(3)
+    timeThread = threading.Thread(target=countdown.countTime, args=())
+    timeThread.start()
 
-faceCascade = cv.CascadeClassifier(cv.data.haarcascades + 'haarcascade_frontalface_default.xml')
+    capture = cv.VideoCapture(0)
+    faceCascade = cv.CascadeClassifier(cv.data.haarcascades + 'haarcascade_frontalface_default.xml')
 
-cv.namedWindow('Webcam Feed', cv.WINDOW_NORMAL)
-cv.setWindowProperty('Webcam Feed', cv.WND_PROP_FULLSCREEN, cv.WINDOW_FULLSCREEN)
+    # sizing game window
+    cv.namedWindow('Game Window', cv.WINDOW_NORMAL)
+    cv.setWindowProperty('Game Window', cv.WND_PROP_FULLSCREEN, cv.WINDOW_FULLSCREEN)
 
-prevCoordinates = (0, 0, 0, 0) # x, y, w, h
-TOLERANCE = 5
-moveText = ""
-
-def setTimeout(callback, delay):
-    time.sleep(delay / 1000)
-    callback()
-
-def setMoving():
+    prevCoordinates = (0, 0, 0, 0) # x, y, w, h
+    TOLERANCE = 5
     moveText = ""
 
-moves = 0
+    moves = 0
 
-while True:
-    ret, frame = capture.read()
+    global winner
 
-    grayFrame = cv.cvtColor(frame, cv.COLOR_BGR2GRAY)
+    winner = ""
 
-    faces = faceCascade.detectMultiScale(grayFrame, scaleFactor=1.1, minNeighbors=5, minSize=(30,30))
-    for (x, y, w, h) in faces: 
-        cv.rectangle(frame, (x, y), (x + w, y + h), (255, 0, 0), 2)
-        print(x, y)
-        x1, y1, w1, h1 = prevCoordinates
-        if (abs(x - x1) > TOLERANCE or abs(y - y1) > TOLERANCE 
-            or abs(w - w1) > TOLERANCE or abs(h - h1) > TOLERANCE):
-            moves += 1
-            if moves > TOLERANCE / 4:
-                moveText = "moving..."
-                print(moves, moveText)
-        else:
-            moveText = ""
-            moves = 0
-        prevCoordinates = (x, y, w, h)
+    while True:
+        ret, frame = capture.read()
+        grayFrame = cv.cvtColor(frame, cv.COLOR_BGR2GRAY)
 
-    cv.putText(frame, moveText, (50, 100), cv.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2)
+        faces = faceCascade.detectMultiScale(grayFrame, scaleFactor=1.1, minNeighbors=5, minSize=(30,30))
+        # for (x, y, w, h) in faces: 
+        #     cv.rectangle(frame, (x, y), (x + w, y + h), (255, 0, 0), 2)
+        #     x1, y1, w1, h1 = prevCoordinates
+        #     if (abs(x - x1) > TOLERANCE or abs(y - y1) > TOLERANCE 
+        #         or abs(w - w1) > TOLERANCE or abs(h - h1) > TOLERANCE):
+        #         moves += 1
+        #         if moves > TOLERANCE / 4:
+        #             moveText = "moving..."
+        #     else:
+        #         moveText = ""
+        #         moves = 0
+        #     prevCoordinates = (x, y, w, h)
+        text = countdown.currTime
 
-    cv.imshow('Webcam Feed', frame)
-    if cv.waitKey(1) & 0xFF == ord('q'):
-        break
+        text_size, _ = cv.getTextSize(text, cv.FONT_HERSHEY_SIMPLEX, 1, 2)
+        
+        padding = 20
+        # top left position for time display
+        text_x = padding
+        text_y = text_size[1] + padding
 
-capture.release()
-cv.destroyAllWindows()
+        cv.putText(frame, countdown.currTime, (text_x, text_y), cv.FONT_HERSHEY_SIMPLEX, 1, (255, 0, 0), 2)
+
+        # positioning of light circle
+        lightRadius = 20
+        center_x = frame.shape[1] - text_size[0] - padding // 2
+        center_y = text_size[1] + padding 
+
+        cv.circle(frame, (center_x, center_y), lightRadius, light.currLight, -1)
+
+        cv.imshow('Game Window', frame)
+
+        if (cv.waitKey(1) & 0xFF == ord('q')) or countdown.timeOver:
+            audio.gameOn = False
+            light.gameOn = False
+            cv.destroyAllWindows()
+            showGameOver()
+            break
+
+    if not countdown.timeOver and winner != "":
+        light.gameOn = False
+        showResults()
+
+    capture.release()
+    cv.destroyAllWindows()
+
+def showResults():
+    # sizing results window
+    cv.namedWindow('Results Window', cv.WINDOW_NORMAL)
+    cv.setWindowProperty('Results Window', cv.WND_PROP_FULLSCREEN, cv.WINDOW_FULLSCREEN)
+
+    resultsImage = np.uint8(np.full((800, 1600, 3), 255))
+
+    winnerStr = "Winner: Player " + winner
+
+    text = winnerStr
+
+    text_size, _ = cv.getTextSize(text, cv.FONT_HERSHEY_SIMPLEX, 2, 2)
+
+    # center position for menu prompt
+    text_x = (resultsImage.shape[1] - text_size[0]) // 2
+    text_y = (resultsImage.shape[0] + text_size[1]) // 2
+
+    cv.putText(resultsImage, text, (text_x, text_y), cv.FONT_HERSHEY_SIMPLEX, 2, (255, 0, 0), 2)
+
+    cv.imshow('Results Window', resultsImage)
+
+    cv.waitKey(0)
+
+def showGameOver():
+
+    # sizing game over window
+    cv.namedWindow('Game Over Window', cv.WINDOW_NORMAL)
+    cv.setWindowProperty('Game Over Window', cv.WND_PROP_FULLSCREEN, cv.WINDOW_FULLSCREEN)
+
+    gameOverImage = np.uint8(np.full((800, 1600, 3), 255))
+
+    text = "GAME OVER: Everyone lost!"
+
+    text_size, _ = cv.getTextSize(text, cv.FONT_HERSHEY_SIMPLEX, 1, 2)
+
+    # center position for menu prompt
+    text_x = (gameOverImage.shape[1] - text_size[0]) // 2
+    text_y = (gameOverImage.shape[0] + text_size[1]) // 2
+
+    cv.putText(gameOverImage, text, (text_x, text_y), cv.FONT_HERSHEY_SIMPLEX, 1, (100, 100, 100), 2)
+
+    cv.imshow('Game Over Window', gameOverImage)
+
+    cv.waitKey(0)
+
+def showmenu():
+    # sizing menu window 
+    cv.namedWindow('Menu Window', cv.WINDOW_NORMAL)
+    cv.setWindowProperty('Menu Window', cv.WND_PROP_FULLSCREEN, cv.WINDOW_FULLSCREEN)
+
+    menuImage = np.uint8(np.full((800, 1600, 3), 255))
+
+    text = "Press Enter to Start Game"
+
+    text_size, _ = cv.getTextSize(text, cv.FONT_HERSHEY_SIMPLEX, 2, 2)
+
+    # center position for menu prompt
+    text_x = (menuImage.shape[1] - text_size[0]) // 2
+    text_y = (menuImage.shape[0] + text_size[1]) // 2
+
+    cv.putText(menuImage, text, (text_x, text_y), cv.FONT_HERSHEY_SIMPLEX, 2, (255, 0, 0), 2)
+
+    cv.imshow('Menu Window', menuImage)
+
+    key = cv.waitKey(0)
+
+    if key == 13:
+        time.sleep(0.2)
+        cv.destroyAllWindows()
+        return
+
+if __name__ == "__main__":
+
+    showmenu()
+
+    videoThread = threading.Thread(target=startGame, args=())
+    videoThread.start()
+
+    # time.sleep(3)
+    audio.gameOn = True
+    audioThread = threading.Thread(target=audio.loopAudio, args=())
+    audioThread.start()
+
+    light.gameOn = True
+    lightThread = threading.Thread(target=light.loopLight, args=())
+    lightThread.start()
+
+    audioThread.join()
