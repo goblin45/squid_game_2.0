@@ -6,6 +6,7 @@ import time
 import audio
 import light
 import countdown
+import distance
 
 def startGame():
     # time.sleep(3)
@@ -23,6 +24,7 @@ def startGame():
 
     global winner
     winner = ""
+    winFlag = False
 
     players = []
     colors = [
@@ -33,21 +35,40 @@ def startGame():
         (128, 128, 128)  # Gray
     ]
 
+    FINISH = 25  # to be tuned later
+
     while True:
         ret, frame = capture.read()
         grayFrame = cv.cvtColor(frame, cv.COLOR_BGR2GRAY)
 
         faces = faceCascade.detectMultiScale(grayFrame, scaleFactor=1.1, minNeighbors=5, minSize=(30,30)) # do whatever you want
 
+        # get distance from finishing line
+        distances = distance.get_distances(faces)
+
         for i, (x, y, w, h) in enumerate(faces): 
             cv.rectangle(frame, (x, y), (x + w, y + h), colors[i % 5], 2)
 
+            # positioning of player id
             text = "Player " + str(i + 1)
-            text_size, _ = cv.getTextSize(text, cv.FONT_HERSHEY_SIMPLEX, 1, 2)
+            text_size, _ = cv.getTextSize(text, cv.FONT_HERSHEY_SIMPLEX, 0.5, 2)
             text_x = x + (w - text_size[0]) // 2
             text_y = y - 10
 
-            cv.putText(frame, text, (text_x, text_y), cv.FONT_HERSHEY_SIMPLEX, 1, colors[i % 5], 2)
+            cv.putText(frame, text, (text_x, text_y), cv.FONT_HERSHEY_SIMPLEX, 0.5, colors[i % 5], 2)
+
+            if distances[i] <= 25:
+                winner = str(i + 1)
+                winFlag = True
+                break
+
+            # positioning of distance measurement
+            text = "Distance: " + str(distances[i].round(2))
+            text_size, _ = cv.getTextSize(text, cv.FONT_HERSHEY_SIMPLEX, 0.5, 1)
+            text_x = x + (w - text_size[0]) // 2
+            text_y = y + h + 20
+
+            cv.putText(frame, text, (text_x, text_y), cv.FONT_HERSHEY_SIMPLEX, 0.5, colors[i % 5], 1)
 
             if i + 1 > len(players):
                 while len(players) < i + 1:
@@ -77,7 +98,7 @@ def startGame():
                     text_x = (frame.shape[1] - text_size[0]) // 2
                     text_y = frame.shape[0] - 30
 
-                    cv.putText(frame, text, (text_x, text_y), cv.FONT_HERSHEY_SIMPLEX, 1.5, (0, 0, 255), 2)
+                    cv.putText(frame, text, (text_x, text_y), cv.FONT_HERSHEY_SIMPLEX, 1.5, (0, 0, 255), 2)  
 
         text = countdown.currTime
         text_size, _ = cv.getTextSize(text, cv.FONT_HERSHEY_SIMPLEX, 1, 2)
@@ -98,16 +119,17 @@ def startGame():
 
         cv.imshow('Game Window', frame)
 
+        if winFlag: 
+            audio.gameOn = False
+            light.gameOn = False
+            showResults()
+            break
+
         if (cv.waitKey(1) & 0xFF == ord('q')) or countdown.timeOver:
             audio.gameOn = False
             light.gameOn = False
-            cv.destroyAllWindows()
             showGameOver()
             break
-
-    if not countdown.timeOver and winner != "":
-        light.gameOn = False
-        showResults()
 
     capture.release()
     cv.destroyAllWindows()
