@@ -1,7 +1,7 @@
 import cv2 as cv
 import time
 
-from audio.py import playAudio
+# from audio.py import playAudio
 
 capture = cv.VideoCapture(0)
 
