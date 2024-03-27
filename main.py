@@ -13,6 +13,23 @@ def startGame():
     timeThread = threading.Thread(target=countdown.countTime, args=())
     timeThread.start()
 
+    hog = cv.HOGDescriptor()
+    hog.setSVMDetector(cv.HOGDescriptor_getDefaultPeopleDetector())
+    prev_gray = None
+    movement_threshold = 5000
+    player_count = 0
+    motion_detected = [False] * 10
+    min_area_threshold = 1500
+
+    def preprocess_frame(frame):
+        gray = cv.cvtColor(frame, cv.COLOR_BGR2GRAY)
+        gray = cv.GaussianBlur(gray, (21, 21), 0)
+        return gray
+    
+    def detect_bodies(frame):
+        (rects, _) = hog.detectMultiScale(frame, winStride=(4, 4), padding=(8, 8), scale=1.05)
+        return rects
+
     capture = cv.VideoCapture(0)
     faceCascade = cv.CascadeClassifier(cv.data.haarcascades + 'haarcascade_frontalface_default.xml')
 
@@ -38,14 +55,31 @@ def startGame():
     FINISH = 25  # to be tuned later
 
     while True:
+
         ret, frame = capture.read()
+        if not ret:
+            break
+        frame_gray = preprocess_frame(frame)
+        if prev_gray is not None:
+            frame_diff = cv.absdiff(prev_gray, frame_gray)
+            _, thresh = cv.threshold(frame_diff, 30, 255, cv.THRESH_BINARY)
+            contours, _ = cv.findContours(thresh, cv.RETR_EXTERNAL, cv.CHAIN_APPROX_SIMPLE)
+
+            for i in range(player_count):
+                if motion_detected[i]:
+                    cv.putText(frame, f'', (10, 50 + i*30), cv.   FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2)
+        prev_gray = frame_gray.copy()
+        bodies = detect_bodies(frame_gray)
+
         grayFrame = cv.cvtColor(frame, cv.COLOR_BGR2GRAY)
 
         faces = faceCascade.detectMultiScale(grayFrame, scaleFactor=1.1, minNeighbors=5, minSize=(30,30)) # do whatever you want
 
+        
+
         # get distance from finishing line
         distances = distance.get_distances(faces)
-
+        disq_players = 0
         for i, (x, y, w, h) in enumerate(faces): 
             cv.rectangle(frame, (x, y), (x + w, y + h), colors[i % 5], 2)
 
@@ -69,7 +103,8 @@ def startGame():
             text_y = y + h + 20
 
             cv.putText(frame, text, (text_x, text_y), cv.FONT_HERSHEY_SIMPLEX, 0.5, colors[i % 5], 1)
-
+            motion_detected[i] = True
+            print(f"Player {i+1} Top-Left Coordinate: ({x}, {y})")
             if i + 1 > len(players):
                 while len(players) < i + 1:
                     players.append([])
@@ -84,25 +119,34 @@ def startGame():
                     player.clear()
             else:
                 # find out maximum movement the past 20 frames, if it exceeds TOLERANCE, detect it as a movement
-                maxMovement = 0
-                for j in range(len(players[i]) - 1):
-                    for k in range(j + 1, len(players[i])):
-                        dist = np.sqrt(abs(players[i][j][0] - players[i][k][0])** 2 + abs(players[i][j][1] - players[i][k][1]) ** 2)
-                        maxMovement = max(maxMovement, dist)
+                # maxMovement = 0
+                # for j in range(len(players[i]) - 1):
+                #     for k in range(j + 1, len(players[i])):
+                #         dist = np.sqrt(abs(players[i][j][0] - players[i][k][0])** 2 + abs(players[i][j][1] - players[i][k][1]) ** 2)
+                #         maxMovement = max(maxMovement, dist)
+                
+                for i in range(player_count):
+                    if motion_detected[i]:
+                        text = "Player " + str(i + 1) + " is out."
+                        text_size, _ = cv.getTextSize(text, cv.FONT_HERSHEY_SIMPLEX, 1.5, 2)
+                        disq_players+=1
+                        if disq_players == player_count:
+                            break
+                        # bottom center position for player cancel notification
+                        text_x = (frame.shape[1] - text_size[0]) // 2
+                        text_y = frame.shape[0] - 30
+                        cv.putText(frame, text, (text_x, text_y), cv.FONT_HERSHEY_SIMPLEX, 1.5, (0, 0, 255), 2)  
+                # if maxMovement > TOLERANCE: # TOLERANCE should be tuned
+                #     text = "Player " + str(i + 1) + " is out."
+                #     text_size, _ = cv.getTextSize(text, cv.FONT_HERSHEY_SIMPLEX, 1.5, 2)
 
-                if maxMovement > TOLERANCE: # TOLERANCE should be tuned
-                    text = "Player " + str(i + 1) + " is out."
-                    text_size, _ = cv.getTextSize(text, cv.FONT_HERSHEY_SIMPLEX, 1.5, 2)
+                #     # bottom center position for player cancel notification
+                #     text_x = (frame.shape[1] - text_size[0]) // 2
+                #     text_y = frame.shape[0] - 30
 
-                    # bottom center position for player cancel notification
-                    text_x = (frame.shape[1] - text_size[0]) // 2
-                    text_y = frame.shape[0] - 30
-
-                    cv.putText(frame, text, (text_x, text_y), cv.FONT_HERSHEY_SIMPLEX, 1.5, (0, 0, 255), 2)  
-
+        player_count = len(bodies)
         text = countdown.currTime
         text_size, _ = cv.getTextSize(text, cv.FONT_HERSHEY_SIMPLEX, 1, 2)
-        
         padding = 20
         # top left position for time display
         text_x = padding
@@ -125,7 +169,7 @@ def startGame():
             showResults()
             break
 
-        if (cv.waitKey(1) & 0xFF == ord('q')) or countdown.timeOver:
+        if (cv.waitKey(1) & 0xFF == ord('q')) or countdown.timeOver or disq_players == len(players):
             audio.gameOn = False
             light.gameOn = False
             showGameOver()
