@@ -1,10 +1,7 @@
-import cv2
 import numpy as np
-
 
 def calculate_distance(focal_length, known_width, width_in_frame):
     return (known_width * focal_length) / width_in_frame
-
 
 def find_distances(focal_length, known_width, detections):
     distances = []
@@ -14,10 +11,7 @@ def find_distances(focal_length, known_width, detections):
     return distances
 
 def get_distances(faces):
-
     KNOWN_WIDTH = 11.0  
-    KNOWN_DISTANCE = 24.0  
-
     focal_length = 500  
     distances = find_distances(focal_length, KNOWN_WIDTH, faces)
     return distances
