@@ -24,4 +24,3 @@ def countTime():
             time.sleep(1)
 
     timeOver = True
-    
