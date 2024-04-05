@@ -26,3 +26,5 @@ def loopAudio():
             else:
                 time.sleep(0.2)
         time.sleep(2)
+        if breakFlag:
+            break
